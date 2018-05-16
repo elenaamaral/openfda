@@ -1,37 +1,41 @@
 
+##FINAL PROJECT
+
+
 import http.server
 import json
 import socketserver
+import http.client
 
 
-# this will let us run the script over and over and prevent  Port Already in use Error after CTRL + C 
+# To prevent Port Already in use Error after CTRL + C, letting us run the script over and over: 
 socketserver.TCPServer.allow_reuse_address = True
 
+# We define the PORT and the IP:
 PORT = 8000
+IP = '127.0.0.1'
 
-
-# EXTENSION III: include the logic to communicate with the OpenFDA remote API.
 class OpenFDAClient():
 
-    def set_arguments(self, params):
-        """
-        Query openfda with desired parameters for example -> ?limit = 10
-        """
+    def send_query(self, params):
+        
+        # For desired parameters for example -> ?limit = 10
+        
 
-        # set user agent
+        # User agent
         headers = {'User-Agent': 'http-client'}
 
-        # make a connection to the HTTPS client (api.fda.gov doesn't allow http so we must use HTTPS)
+        # Connection to the HTTPS client (api.fda.gov doesn't allow http so we must use HTTPS)
         con = http.client.HTTPSConnection("api.fda.gov")
 
-        # build the params
-        query_url = "/drug/label.json"
+        # Params
+        given_url = "/drug/label.json"
         if params:
-            query_url += "?" + params
+            given_url += "?" + params
 
-        print("fetching", query_url)
+        print("fetching", given_url)
 
-        con.request("GET", query_url, None, headers)
+        con.request("GET", given_url, None, headers)
         
         response = con.getresponse()
         print("Status:", response.status, response.reason)
@@ -47,50 +51,50 @@ class OpenFDAClient():
         
 
     def search_drugs(self, active_ingredient, limit=10):
-        """
-        Search for drugs given an active ingredient drug_name with limit default is 10
-        """
+        
+        # Search for drugs given an active ingredient drug_name with limit default is 10
+        
         params = 'search=active_ingredient:"{}"'.format(active_ingredient)
         
         if limit: 
             params += "&limit=" + str(limit)
-        drugs = self.set_arguments(params) 
+        drugs = self.send_query(params) 
         return drugs['results'] if 'results' in drugs else []
 
     def search_companies_info(self, company_name, limit=10):
-        """
-        Search for companies_info given a company_name with optional limit default is 10
-        """
+        
+        # Search for companies_info given a company_name with optional limit default is 10
+        
         params = 'search=openfda.manufacturer_name:"%s"' % company_name
         if limit:
             params += "&limit=" + str(limit)
-        drugs = self.set_arguments(params)
+        drugs = self.send_query(params)
 
         return drugs
 
 
 
     def list_drugs(self, limit=10):
-        """
-        List default drugs from the api the default limit is 10
-        """
+        
+        # List default drugs from the api the default limit is 10
+        
 
         params = "limit=" + str(limit)
 
-        drugs = self.set_arguments(params)
+        drugs = self.send_query(params)
 
         return drugs
 
    
 
-# EXTENSION III: includes the logic to extract the data from drugs result. 
+# EXTENSION III: Includes the logic to extract the data from drugs result. 
 class OpenFDAParser():
 
 
     def parse_drugs(self, drugs):
-        """
-        parse drugs information from the openfda api
-        """
+       
+        # parse drugs information from the openfda api
+        
 
         drugs_labels = []
 
@@ -106,9 +110,9 @@ class OpenFDAParser():
         return drugs_labels
 
     def parse_companies_info(self, drugs):
-        """
-        Parse extracted drugs data and list all company info
-        """
+        
+        # Parse extracted drugs data and list all company info
+        
         companies_info = []
         for drug in drugs:
             if 'openfda' in drug and 'manufacturer_name' in drug['openfda']:
@@ -122,9 +126,9 @@ class OpenFDAParser():
 
     # EXTENSION I: list warnings
     def parse_warnings(self, drugs):
-        """
-        Parse the warnings data and extract warnings         
-        """
+        
+        # Parse the warnings data and extract warnings         
+        
 
         warnings = []
 
@@ -140,9 +144,9 @@ class OpenFDAParser():
 class OpenFDAHTML():
 
     def build_html_list(self, result):
-        """
-        Build the unorder list of html from the result
-        """
+        
+        # Build the unorder list of html from the result
+        
 
         html_list = "<ul>"
         for item in result:
@@ -164,7 +168,7 @@ class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     # Handle all the GET Requests
     def do_GET(self):
         """
-        the server will respond to all the paths such as: /, searchDrug?drug=<drug_name>
+        All the paths will be responded by the server: /, searchDrug?drug=<drug_name>
         searchCompany?company=<company_name>, listDrugs, listcompanies_info, listWarnings
         additionally it will also keep track of limits for each of these listings
         on GET cmd
@@ -172,13 +176,13 @@ class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
         # initialize the classes objects
         client = OpenFDAClient()
-        html_builder = OpenFDAHTML()
-        json_parser = OpenFDAParser()
+        html = OpenFDAHTML()
+        parser = OpenFDAParser()
 
         
         # generic response for any urls except the defined one
         response_code = 404
-        response = html_builder.show_page_not_found()
+        response = html.show_page_not_found()
 
         if self.path == "/":
             # Return home page
@@ -197,14 +201,14 @@ class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 elif param_name == 'limit':
                     limit = param_value
             result = client.search_drugs(active_ingredient, limit)
-            response = html_builder.build_html_list(json_parser.parse_drugs(result))
+            response = html.build_html_list(parser.parse_drugs(result))
         
         elif 'listDrugs' in self.path:
             limit = None
             if len(self.path.split("?")) > 1:
                 limit = self.path.split("?")[1].split("=")[1]
             result = client.list_drugs(limit)
-            response = html_builder.build_html_list(json_parser.parse_drugs(result))
+            response = html.build_html_list(parser.parse_drugs(result))
         
         elif 'searchCompany' in self.path:
             company_name = None
@@ -218,14 +222,14 @@ class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
                 elif param_name == 'limit':
                     limit = param_value
             result = client.search_companies_info(company_name, limit)
-            response = html_builder.build_html_list(json_parser.parse_companies_info(result))
+            response = html.build_html_list(parser.parse_companies_info(result))
 
         elif 'listCompanies' in self.path:
             limit = None
             if len(self.path.split("?")) > 1:
                 limit = self.path.split("?")[1].split("=")[1]
             result = client.list_drugs(limit)
-            response = html_builder.build_html_list(json_parser.parse_companies_info(result))
+            response = html.build_html_list(parser.parse_companies_info(result))
 
         # EXTENSION I: List Warnings
         elif 'listWarnings' in self.path:
@@ -233,7 +237,7 @@ class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             if len(self.path.split("?")) > 1:
                 limit = self.path.split("?")[1].split("=")[1]
             result = client.list_drugs(limit)
-            response = html_builder.build_html_list(json_parser.parse_warnings(result))
+            response = html.build_html_list(parser.parse_warnings(result))
         
         
         # Extension IV: Redirect and Authentication
@@ -261,6 +265,6 @@ class testHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
 
 Handler = testHTTPRequestHandler
 
-httpd = socketserver.TCPServer(("", PORT), Handler)
+httpd = socketserver.TCPServer((IP, PORT), Handler)
 print("serving at port", PORT)
 httpd.serve_forever()
